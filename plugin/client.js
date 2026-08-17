@@ -18,9 +18,10 @@
  */
 window.__ModuleLoader__?.load({ id: 'dsh-recall-unread', factory: (require) => {
   const React = require('react')
-  // 只声明真正必需的 UI 服务；不再 inject 'timer'（轮询里已对 ctx.interval 做防护），
-  // 避免任何服务缺失时 fiber 永久 pending / apply 抛错，把 DSH 启动锁死。
-  const inject = ['slots']
+  // 声明必需的 UI 服务 + timer（轮询用 ctx.interval、条带状态自动清除用 ctx.timeout）。
+  // ⚠️ 不要去掉 'timer'：Cordis 的 ctx 是 Proxy，访问未 inject 的服务属性会直接抛
+  //    "cannot get property \"timer\" without inject"，导致 apply 阶段加载失败。
+  const inject = ['slots', 'timer']
 
   // ---- 共享开关状态（轮询同步 + 条带订阅）----
   const listeners = new Set()
