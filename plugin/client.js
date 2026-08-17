@@ -2,6 +2,9 @@
  * dsh-recall-unread — Client half（静态 web profile 版，启动入口在 Amadeus 插件启动器菜单内）
  *
  * 通过 window.__ModuleLoader__ 注册到 DSH 网页运行时。
+ * ⚠️ 修改警告：__ModuleLoader__.load 的 factory 只注入 require，不注入 module！
+ *    必须在 factory 第一行声明 `var module = { exports: {} }; var exports = module.exports;`，
+ *    否则执行到 module.exports 会报 "module is not defined"（详见 amadeus-for-dsh/client.js）。
  * - 启动入口位于 Amadeus 🧩 插件启动器菜单（由 Host 半端通过 amadeus-skins.register 注册）；
  * - 本端轮询 amadeus /amadeus/rpc?m=getStatus，读取「撤回插件」条目的 active 状态；
  * - active 为 true 时，「未读消息」条带（conversation.input.dock）才显示——
