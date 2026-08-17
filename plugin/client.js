@@ -1,15 +1,31 @@
 /*
- * dsh-recall-unread — Client half（静态 web profile 版）
+ * dsh-recall-unread — Client half（静态 web profile 版，启动入口在 Amadeus 插件启动器菜单内）
  *
  * 通过 window.__ModuleLoader__ 注册到 DSH 网页运行时。
- * 在 conversation.input.dock 插槽注册「未读消息」条带：列出仍处于
- * pending（模型尚未读取）的插话消息（placement: 'steering'），
- * 每条提供「撤回」按钮；撤回直接调用官方会话 RPC
- * sessions.binding(sessionId).session.updateQueue(itemId, { kind: 'remove' })。
+ * - 启动入口位于 Amadeus 🧩 插件启动器菜单（由 Host 半端通过 amadeus-skins.register 注册）；
+ * - 本端轮询 amadeus /amadeus/rpc?m=getStatus，读取「撤回插件」条目的 active 状态；
+ * - active 为 true 时，「未读消息」条带（conversation.input.dock）才显示——
+ *   列出仍处于 pending（模型尚未读取）的插话消息（placement: 'steering'），
+ *   每条提供「撤回」按钮，撤回调用官方会话 RPC
+ *   sessions.binding(sessionId).session.updateQueue(itemId, { kind: 'remove' })。
  */
 window.__ModuleLoader__.load({ id: 'dsh-recall-unread', factory: (require) => {
   const React = require('react')
   const inject = ['slots', 'timer']
+
+  // ---- 共享开关状态（轮询同步 + 条带订阅）----
+  const listeners = new Set()
+  let active = false
+  function getActive() { return active }
+  function setActive(value) {
+    if (value === active) return
+    active = value
+    for (const fn of listeners) fn()
+  }
+  function subscribeStore(fn) {
+    listeners.add(fn)
+    return () => { listeners.delete(fn) }
+  }
 
   function apply(ctx) {
     const slots = ctx.get('slots')
@@ -41,7 +57,30 @@ window.__ModuleLoader__.load({ id: 'dsh-recall-unread', factory: (require) => {
       try { styleTag.remove() } catch (error) { /* ignore */ }
     })
 
+    // ---- 轮询 Amadeus 启动器状态，同步「撤回插件」active ----
+    ctx.effect(() => {
+      const sync = async () => {
+        try {
+          const res = await fetch('/amadeus/rpc?m=getStatus&args=' + encodeURIComponent(JSON.stringify({})), { cache: 'no-store' })
+          const data = await res.json()
+          if (data && Array.isArray(data.skins)) {
+            const mine = data.skins.find((e) => e.id === 'recall-unread')
+            if (mine !== undefined) setActive(mine.active === true)
+          }
+        } catch (error) {
+          // amadeus 不可用：保持关闭状态
+        }
+      }
+      sync()
+      return ctx.interval(sync, 2000)
+    })
+
+    // ---- 「未读消息」条带（仅 amadeus 菜单启动后显示）----
     const RecallDock = (props) => {
+      const [on, setOn] = React.useState(getActive())
+      React.useEffect(() => subscribeStore(() => setOn(getActive())), [])
+      if (!on) return null
+
       const queue = (props.session && props.session.queue) || []
       const steering = queue.filter((row) => row.placement === 'steering')
       const [busy, setBusy] = React.useState(null)
