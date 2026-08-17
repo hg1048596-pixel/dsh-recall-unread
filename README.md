@@ -139,6 +139,14 @@ DSH 的 `window.__ModuleLoader__.load` 的 factory **只注入 `require`，不�
 factory 直接 `return { inject, apply }`（返回值就是模块导出）。无论怎么改、
 怎么重新包装，都不会再出现 `module is not defined`。文件头有详细警告注释。
 
+> ⚠️ **不要删掉 `inject` 里的 `'timer'`**：Cordis 的 `ctx` 是 Proxy，
+> 未 inject 的服务属性被访问时会直接抛 `cannot get property "timer" without inject`，
+> 导致 apply 阶段失败。客户端的 `timer` 服务由核心插件
+> `@deepseek-ai/dsh-cordis-client-runner` 提供（`ctx.interval` / `ctx.timeout`
+> 已 mixin 到 Context 原型，随 fiber 自动清理），轮询和提示自动消失都依赖它。
+> 同理 Host 半端保留 `inject: ['timer']`（Host 端 timer 由
+> `@deepseek-ai/cordis-plugin-timer` 保证，profile 启动时自动加载）。
+
 ### 2. Git 钩子：带病 bundle 不允许提交（安装一次即可）
 
 ```powershell
@@ -173,6 +181,9 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File tools/recall-killswitch.ps1 -Actio
 
 ## 📦 版本历史
 
+- **v1.0.1**（2026-08）防锁死固化：bundle 彻底移除 `module`/`exports` 引用
+  （factory 直接 return 导出）；`?.load` 注册守卫；`inject` 保留
+  `['slots','timer']` 并加 Proxy 访问警告；新增 git 钩子校验与一键急救开关脚本。
 - **v1.0.0**（2026-08）首个可运行版本：Host RPC 撤回 + Client 未读消息条带。
 
 ## 📄 许可证
