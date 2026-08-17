@@ -11,5 +11,6 @@
     "host": "src/host.js",
     "client": "src/client.js"
   },
+  "staticPackage": "plugin/",
   "license": "MIT"
 }

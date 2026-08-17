@@ -1,0 +1,25 @@
+{
+  "name": "dsh-recall-unread",
+  "version": "1.0.0",
+  "description": "DeepSeek Harness plugin: recall sent-but-unread text messages before the model reads them (static web-profile build).",
+  "type": "module",
+  "main": "./host.js",
+  "exports": {
+    ".": "./host.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  },
+  "files": [
+    "host.js",
+    "client.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT"
+}

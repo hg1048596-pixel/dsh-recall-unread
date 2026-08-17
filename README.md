@@ -4,9 +4,10 @@
 
 在模型运行中发送文字（插话发送）时，消息会以“待处理”气泡的形式出现在对话尾部——在模型认领（读取）之前，你可以一键撤回，避免把还没想好的话发给模型。
 
-![screenshot](docs/screenshot.png)
+<!-- 截图（可选）：把实际效果截图保存为 docs/screenshot.png，然后取消下方注释即可显示 -->
+<!-- ![screenshot](docs/screenshot.png) -->
 
-> 截图占位：可以把实际效果截图后替换 `docs/screenshot.png`。
+> 截图占位：可将实际效果截图保存为 `docs/screenshot.png`，并取消上方 `![screenshot]` 的注释。
 
 ---
 
@@ -51,14 +52,38 @@ dsh-recall-unread/
 ├── package.json               # 项目元数据（GitHub 展示用）
 ├── plugin.json                # 插件清单（名称 / ID 前缀 / 代码来源）
 ├── src/
-│   ├── host.js                # Host 半端源码（可直接作为 code.host）
-│   └── client.js              # Client 半端源码（可直接作为 code.client）
+│   ├── host.js                # Host 半端源码（动态版，可直接作为 code.host）
+│   └── client.js              # Client 半端源码（动态版，可直接作为 code.client）
+├── plugin/                    # 静态 web profile 插件包（随 DSH 启动自动加载，推荐）
+│   ├── package.json           # 安装包元数据（含 dsh.client 声明）
+│   ├── host.js                # Host 占位半端
+│   └── client.js              # Client bundle（__ModuleLoader__ 注册）
 └── docs/                      # 截图等附加资源（可选）
 ```
 
 ## 🚀 安装与激活
 
-本项目是 **DSH 动态 Cordis 插件**（进程级定义），激活方式与官方 Cordis 插件开发流程一致：
+### 方式一：静态安装（推荐，随 DSH 启动自动加载，重启不丢失）
+
+把 `plugin/` 目录安装为 DSH web profile 的静态插件，DSH 每次启动都会自动加载：
+
+1. 将 `plugin/` 整个目录复制到 web profile 的 node_modules 下：
+   ```
+   ~/.dsh/profiles/web/node_modules/dsh-recall-unread/
+   ```
+2. 在 `~/.dsh/profiles/web/cordis.patch.yml` 末尾追加加载行：
+   ```yaml
+   - insert:
+       - id: recall-unread
+         name: dsh-recall-unread
+   ```
+3. 重启 DSH。启动后「未读消息」条带即自动可用，无需任何手动开启步骤。
+
+> 说明：静态版在 Client 端直接调用官方会话 RPC `session.updateQueue(itemId, { kind: 'remove' })`（与官方队列坞的「删除」同一实现），无需动态 RPC，与官方界面行为完全一致。
+
+### 方式二：动态插件（临时体验，重启后失效）
+
+本项目也可作为 **DSH 动态 Cordis 插件**（进程级定义）临时体验：
 
 1. 打开 DSH，在会话中进入 **Cordis 插件开发** 流程（`cordis_define`）。
 2. 新建插件：
@@ -70,7 +95,16 @@ dsh-recall-unread/
 3. 用返回的 `pluginId` / `packageId` 调用 `cordis_run` 激活，并在界面批准运行。
 4. 激活后在模型运行中发送一条插话消息，即可在输入框上方看到「未读消息」条带与「撤回」按钮。
 
-> 注意：动态插件是进程级、临时的——DSH 重启后需要重新定义（这是 DSH 动态插件机制本身的性质，非本插件缺陷）。如需常驻，可结合 DSH 的 agent preset / 静态插件机制部署。
+> 注意：动态插件是进程级、临时的——DSH 重启后需要重新定义。长期使用请用**方式一**的静态安装。
+
+## ⚙️ 配置
+
+本插件**零配置、开箱即用**，无需任何设置。如需微调，修改 `src/client.js` 后重新定义（`cordis_define`）即可，常用可调项：
+
+| 项 | 位置 | 说明 |
+| --- | --- | --- |
+| 条带排序 | `slots.register(…, order: 30)` | 数字越大越靠后，可调整与输入框的贴近程度 |
+| 提示停留时长 | `ctx.timeout(() => setStatus(null), 2500)` | 撤回结果提示自动消失的时间（毫秒） |
 
 ## 📖 使用说明
 
@@ -84,7 +118,7 @@ dsh-recall-unread/
 - 仅能撤回 **尚未被模型读取**（仍在 inbox）的消息；一旦被认领即不可撤回。
 - 排队消息（`queued`）官方队列坞已提供删除，本插件不重复覆盖。
 - 受限于官方未提供“消息气泡级”插槽，撤回入口放在输入框上方的条带中，而非直接悬浮在气泡上。
-- 动态插件不持久化；如需长期使用请按上述方式在重启后重新激活，或接入静态插件机制。
+- 动态插件不持久化；按「方式一」静态安装后随 DSH 启动自动加载，重启不丢失。
 
 ## 📦 版本历史
 

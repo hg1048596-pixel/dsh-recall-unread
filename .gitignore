@@ -21,5 +21,18 @@ desktop.ini
 .idea/
 *.swp
 
-# GitHub
-.DS_Store
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Test coverage
+coverage/
+
+# Package manager caches
+.pnpm-store/
+.yarn/

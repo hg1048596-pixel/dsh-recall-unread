@@ -11,5 +11,13 @@
     "cordis",
     "recall",
     "撤回"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hg1048596-pixel/dsh-recall-unread.git"
+  },
+  "homepage": "https://github.com/hg1048596-pixel/dsh-recall-unread#readme",
+  "bugs": {
+    "url": "https://github.com/hg1048596-pixel/dsh-recall-unread/issues"
+  }
 }
