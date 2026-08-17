@@ -20,7 +20,7 @@ export function apply(ctx) {
       id: 'recall-unread',
       name: '撤回插件',
       desc: '启动/停止「已发送未读取消息」撤回条带',
-      active: false,
+      active: true,
       onStart: () => {
         console.log('[dsh-recall-unread] 已通过插件启动器启动')
       },
