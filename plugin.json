@@ -1,0 +1,15 @@
+{
+  "name": "dsh-recall-unread",
+  "displayName": "撤回已发送未读取的消息",
+  "description": "DeepSeek Harness 插件：撤回已发送但尚未被模型读取的文字消息（pending steering 消息）。",
+  "version": "1.0.0",
+  "idPrefix": "recall",
+  "pluginId": "recall-3",
+  "currentPackageId": "pkg-10",
+  "purpose": "Adds a 撤回 (recall) strip for sent-but-unread text messages via Host inbox removal; client uses only slot props and package RPC.",
+  "sources": {
+    "host": "src/host.js",
+    "client": "src/client.js"
+  },
+  "license": "MIT"
+}

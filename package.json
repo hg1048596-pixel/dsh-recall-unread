@@ -1,0 +1,15 @@
+{
+  "name": "dsh-recall-unread",
+  "version": "1.0.0",
+  "description": "DeepSeek Harness plugin: recall sent-but-unread text messages before the model reads them.",
+  "private": true,
+  "license": "MIT",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "plugin",
+    "cordis",
+    "recall",
+    "撤回"
+  ]
+}

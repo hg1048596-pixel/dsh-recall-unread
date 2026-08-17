@@ -1,0 +1,25 @@
+# Dependencies / build
+node_modules/
+dist/
+out/
+
+# Local tool caches
+.npm-cache/
+.tooling/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# GitHub
+.DS_Store
