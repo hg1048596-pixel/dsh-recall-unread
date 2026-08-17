@@ -1,0 +1,13 @@
+#!/bin/sh
+# dsh-recall-unread pre-commit hook
+# 提交前校验：禁止把会锁死 DSH 启动的 client bundle 提交进仓库。
+# 安装：pwsh -NoProfile -ExecutionPolicy Bypass -File tools/install-hooks.ps1
+set -e
+root="$(git rev-parse --show-toplevel)"
+if command -v pwsh >/dev/null 2>&1; then
+  pwsh -NoProfile -ExecutionPolicy Bypass -File "$root/tools/check-client-bundle.ps1"
+elif command -v powershell >/dev/null 2>&1; then
+  powershell -NoProfile -ExecutionPolicy Bypass -File "$root/tools/check-client-bundle.ps1"
+else
+  echo "pre-commit: 找不到 pwsh/powershell，跳过 bundle 校验（不推荐）" >&2
+fi

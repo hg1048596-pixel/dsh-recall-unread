@@ -125,6 +125,52 @@ dsh-recall-unread/
 - 受限于官方未提供“消息气泡级”插槽，撤回入口放在输入框上方的条带中，而非直接悬浮在气泡上。
 - 动态插件不持久化；按「方式一」静态安装后随 DSH 启动自动加载，重启不丢失。
 
+## 🔒 防锁死机制（重要）
+
+DSH 网页启动是 **fail-loud** 的：任何一个插件加载失败都会整屏显示
+`Failed to load plugins`，导致进不去 DSH。本插件曾因 bundle 里引用
+`module.exports` 而触发 `ReferenceError: module is not defined` 锁死启动，
+现从三层做了固化：
+
+### 1. Bundle 结构性修复（已生效）
+
+DSH 的 `window.__ModuleLoader__.load` 的 factory **只注入 `require`，不注入
+`module` / `exports`**。`plugin/client.js` 现在完全不引用 `module` / `exports`，
+factory 直接 `return { inject, apply }`（返回值就是模块导出）。无论怎么改、
+怎么重新包装，都不会再出现 `module is not defined`。文件头有详细警告注释。
+
+### 2. Git 钩子：带病 bundle 不允许提交（安装一次即可）
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File tools/install-hooks.ps1
+```
+
+安装后每次 `git commit` 自动运行 `tools/check-client-bundle.ps1`：
+
+- `node --check` 校验 `plugin/client.js` / `plugin/host.js` 语法；
+- 拦截任何非注释的 `module` / `exports` 引用（即会锁死 DSH 的写法）。
+
+校验失败会**直接拒绝提交**，从源头杜绝回归。手动运行同样可以：
+`pwsh -NoProfile -ExecutionPolicy Bypass -File tools/check-client-bundle.ps1`。
+
+### 3. 急救开关：万一再出问题，一键进 DSH
+
+如果插件又导致启动红屏，**不用改任何配置**，禁用它即可正常进入 DSH：
+
+```powershell
+# 禁用撤回插件（自动备份 cordis.patch.yml），然后重启 DSH
+pwsh -NoProfile -ExecutionPolicy Bypass -File tools/recall-killswitch.ps1
+
+# 恢复撤回插件，然后重启 DSH
+pwsh -NoProfile -ExecutionPolicy Bypass -File tools/recall-killswitch.ps1 -Action enable
+```
+
+原理：在 `~/.dsh/profiles/web/cordis.patch.yml` 的 `recall-unread` 条目上加/删
+`disabled: true`（loader 对 disabled 条目直接跳过，不导入该插件）。
+
+> 修改 `plugin/client.js` 后记得重新部署到
+> `~/.dsh/profiles/web/node_modules/dsh-recall-unread/` 并重启 DSH。
+
 ## 📦 版本历史
 
 - **v1.0.0**（2026-08）首个可运行版本：Host RPC 撤回 + Client 未读消息条带。

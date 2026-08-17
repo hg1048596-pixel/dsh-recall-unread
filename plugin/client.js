@@ -16,9 +16,11 @@
  *   每条提供「撤回」按钮，撤回调用官方会话 RPC
  *   sessions.binding(sessionId).session.updateQueue(itemId, { kind: 'remove' })。
  */
-window.__ModuleLoader__.load({ id: 'dsh-recall-unread', factory: (require) => {
+window.__ModuleLoader__?.load({ id: 'dsh-recall-unread', factory: (require) => {
   const React = require('react')
-  const inject = ['slots', 'timer']
+  // 只声明真正必需的 UI 服务；不再 inject 'timer'（轮询里已对 ctx.interval 做防护），
+  // 避免任何服务缺失时 fiber 永久 pending / apply 抛错，把 DSH 启动锁死。
+  const inject = ['slots']
 
   // ---- 共享开关状态（轮询同步 + 条带订阅）----
   const listeners = new Set()
@@ -79,6 +81,8 @@ window.__ModuleLoader__.load({ id: 'dsh-recall-unread', factory: (require) => {
         }
       }
       sync()
+      // 防护：timer 服务缺失时绝不抛错/挂起（fallback 为单次同步）
+      if (typeof ctx.interval !== 'function') return
       return ctx.interval(sync, 2000)
     })
 
