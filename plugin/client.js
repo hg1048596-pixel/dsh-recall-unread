@@ -10,6 +10,7 @@
  *   sessions.binding(sessionId).session.updateQueue(itemId, { kind: 'remove' })。
  */
 window.__ModuleLoader__.load({ id: 'dsh-recall-unread', factory: (require) => {
+  var module = { exports: {} }; var exports = module.exports;
   const React = require('react')
   const inject = ['slots', 'timer']
 
