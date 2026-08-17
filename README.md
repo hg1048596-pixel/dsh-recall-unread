@@ -53,8 +53,7 @@ dsh-recall-unread/
 ├── src/
 │   ├── host.js                # Host 半端源码（可直接作为 code.host）
 │   └── client.js              # Client 半端源码（可直接作为 code.client）
-└── docs/
-    └── github-upload-tutorial.md  # 上传 GitHub 的细致教程
+└── docs/                      # 截图等附加资源（可选）
 ```
 
 ## 🚀 安装与激活
