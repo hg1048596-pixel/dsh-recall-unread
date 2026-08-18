@@ -2,6 +2,19 @@
   "name": "dsh-recall-unread",
   "version": "1.0.0",
   "description": "DeepSeek Harness plugin: recall sent-but-unread text messages before the model reads them.",
+  "type": "module",
+  "main": "./plugin/host.js",
+  "exports": {
+    ".": "./plugin/host.js",
+    "./client": "./plugin/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "plugin/",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
   "private": true,
   "license": "MIT",
   "keywords": [
@@ -12,6 +25,14 @@
     "recall",
     "撤回"
   ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/hg1048596-pixel/dsh-recall-unread.git"

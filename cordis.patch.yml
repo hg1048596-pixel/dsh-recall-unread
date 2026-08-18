@@ -1,0 +1,5 @@
+# dsh-recall-unread — installable plugin manifest (dsh.bundle patch layer)
+# 被 dsh plugin add 消费：把本插件插入 profile 的 loader entry 树。
+- insert:
+    - id: recall-unread
+      name: dsh-recall-unread
