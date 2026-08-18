@@ -13,8 +13,8 @@
 
 ## ✨ 功能特性
 
-- **启动入口在 Amadeus 插件启动器里**：侧边栏 🧩 插件按钮 → 菜单中的「撤回插件」条目，点「启动」才生效（默认关闭，不自动启动）。
-- **未读消息条带**：启动后，在输入框上方（`conversation.input.dock` 插槽）列出所有已发送但模型尚未读取的插话消息（`placement: 'steering'`）。
+- **启用即生效**：在插件市场（dsh-market）或插件管理页启用本插件后，「未读消息」条带立即生效；停用即整体不加载。不依赖任何启动器菜单。
+- **未读消息条带**：在输入框上方（`conversation.input.dock` 插槽）列出所有已发送但模型尚未读取的插话消息（`placement: 'steering'`）。
 - **单条撤回**：每条消息显示预览文本 + 「撤回」按钮，点击后消息从对话中移除，并提示“已撤回一条消息”。
 - **全部撤回**：存在多条未读消息时提供「全部撤回」一键操作。
 - **只读语义**：消息一旦被模型认领（开始读取）会自动离开条带，此时无法撤回——严格符合“仅未读取可撤回”。
@@ -60,7 +60,7 @@ dsh-recall-unread/
 │   └── client.js              # Client 半端源码（动态版，可直接作为 code.client）
 ├── plugin/                    # 静态 web profile 插件包（安装后随 DSH 加载，推荐）
 │   ├── package.json           # 安装包元数据（含 dsh.client 声明）
-│   ├── host.js                # Host 半端：注册进 Amadeus 插件启动器菜单
+│   ├── host.js                # Host 半端（空实现占位，撤回走客户端官方 RPC）
 │   └── client.js              # Client bundle（__ModuleLoader__ 注册）
 └── docs/                      # 截图等附加资源（可选）
 ```
@@ -69,7 +69,7 @@ dsh-recall-unread/
 
 ### 方式一：静态安装（推荐，随 DSH 加载，重启不丢失）
 
-把 `plugin/` 目录安装为 DSH web profile 的静态插件（需要 DSH 已装 Amadeus 插件，用于提供启动器菜单）：
+把 `plugin/` 目录安装为 DSH web profile 的静态插件：
 
 1. 将 `plugin/` 整个目录复制到 web profile 的 node_modules 下：
    ```
@@ -81,9 +81,9 @@ dsh-recall-unread/
        - id: recall-unread
          name: dsh-recall-unread
    ```
-3. 重启 DSH。侧边栏 🧩 插件按钮的菜单里会出现「撤回插件」条目，**默认关闭**；点「启动」后「未读消息」条带才生效。
+3. 重启 DSH。插件启用后「未读消息」条带即生效；可在插件市场（dsh-market）或插件管理页随时停用/启用。
 
-> 说明：静态版在 Client 端直接调用官方会话 RPC `session.updateQueue(itemId, { kind: 'remove' })`（与官方队列坞的「删除」同一实现），无需动态 RPC，与官方界面行为完全一致。启动/停止状态由 Amadeus 启动器菜单统一管理（`amadeus-skins.register`）。
+> 说明：静态版在 Client 端直接调用官方会话 RPC `session.updateQueue(itemId, { kind: 'remove' })`（与官方队列坞的「删除」同一实现），无需动态 RPC，与官方界面行为完全一致。插件不依赖 Amadeus。
 
 ### 方式二：动态插件（临时体验，重启后失效）
 
@@ -112,7 +112,7 @@ dsh-recall-unread/
 
 ## 📖 使用说明
 
-1. 点击侧边栏底部的 **🧩 插件按钮**，在弹出的菜单中找到「撤回插件」，点「**启动**」。（默认关闭，需手动启动一次；重启 DSH 后再次点击启动即可。）
+1. 确保插件已启用（安装后默认启用；可在插件市场/管理页开关）。
 2. 模型正在运行（如深度思考、长工具调用）时，用**插话发送**（默认快捷键：运行中发送即进入 steering）发出一条文字。
 3. 消息出现在对话尾部（带“待处理”标记），同时输入框上方出现「未读消息」条带。
 4. 点击该消息右侧的「撤回」——气泡与条带立即消失，提示“已撤回一条消息”。
@@ -181,6 +181,8 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File tools/recall-killswitch.ps1 -Actio
 
 ## 📦 版本历史
 
+- **v1.1.0**（2026-08）移除 Amadeus 启动器依赖：删除 🧩 菜单入口与客户端
+  amadeus 轮询，改为启用即生效（插件市场/管理页的启用·停用开关控制加载）。
 - **v1.0.1**（2026-08）防锁死固化：bundle 彻底移除 `module`/`exports` 引用
   （factory 直接 return 导出）；`?.load` 注册守卫；`inject` 保留
   `['slots','timer']` 并加 Proxy 访问警告；新增 git 钩子校验与一键急救开关脚本。

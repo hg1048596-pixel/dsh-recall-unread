@@ -1,5 +1,5 @@
 /*
- * dsh-recall-unread — Client half（静态 web profile 版，启动入口在 Amadeus 插件启动器菜单内）
+ * dsh-recall-unread — Client half（静态 web profile 版，启用即生效）
  *
  * 通过 window.__ModuleLoader__ 注册到 DSH 网页运行时。
  * ⚠️ 修改警告：__ModuleLoader__.load 的 factory 只注入 require，不注入 module/exports！
@@ -9,33 +9,19 @@
  *    "Failed to load plugins / failed to import loader entry (dsh-recall-unread)"。
  *    （官方包的 CJS 写法 `var module = { exports: {} }` 也只是声明局部变量，
  *     本插件直接用 return 返回导出，彻底绕开这个坑。）
- * - 启动入口位于 Amadeus 🧩 插件启动器菜单（由 Host 半端通过 amadeus-skins.register 注册）；
- * - 本端轮询 amadeus /amadeus/rpc?m=getStatus，读取「撤回插件」条目的 active 状态；
- * - active 为 true 时，「未读消息」条带（conversation.input.dock）才显示——
+ * - 插件启用后，「未读消息」条带（conversation.input.dock）直接生效——
  *   列出仍处于 pending（模型尚未读取）的插话消息（placement: 'steering'），
  *   每条提供「撤回」按钮，撤回调用官方会话 RPC
  *   sessions.binding(sessionId).session.updateQueue(itemId, { kind: 'remove' })。
+ * - 启用/停用由插件市场（dsh-market）或插件管理页的开关控制：禁用 = 不加载。
+ * - 不再依赖 Amadeus 启动器（无 amadeus 轮询、无启动器菜单条目）。
  */
 window.__ModuleLoader__?.load({ id: 'dsh-recall-unread', factory: (require) => {
   const React = require('react')
-  // 声明必需的 UI 服务 + timer（轮询用 ctx.interval、条带状态自动清除用 ctx.timeout）。
+  // 声明必需的 UI 服务 + timer（条带状态提示自动清除用 ctx.timeout）。
   // ⚠️ 不要去掉 'timer'：Cordis 的 ctx 是 Proxy，访问未 inject 的服务属性会直接抛
   //    "cannot get property \"timer\" without inject"，导致 apply 阶段加载失败。
   const inject = ['slots', 'timer']
-
-  // ---- 共享开关状态（轮询同步 + 条带订阅）----
-  const listeners = new Set()
-  let active = false
-  function getActive() { return active }
-  function setActive(value) {
-    if (value === active) return
-    active = value
-    for (const fn of listeners) fn()
-  }
-  function subscribeStore(fn) {
-    listeners.add(fn)
-    return () => { listeners.delete(fn) }
-  }
 
   function apply(ctx) {
     const slots = ctx.get('slots')
@@ -67,32 +53,8 @@ window.__ModuleLoader__?.load({ id: 'dsh-recall-unread', factory: (require) => {
       try { styleTag.remove() } catch (error) { /* ignore */ }
     })
 
-    // ---- 轮询 Amadeus 启动器状态，同步「撤回插件」active ----
-    ctx.effect(() => {
-      const sync = async () => {
-        try {
-          const res = await fetch('/amadeus/rpc?m=getStatus&args=' + encodeURIComponent(JSON.stringify({})), { cache: 'no-store' })
-          const data = await res.json()
-          if (data && Array.isArray(data.skins)) {
-            const mine = data.skins.find((e) => e.id === 'recall-unread')
-            if (mine !== undefined) setActive(mine.active === true)
-          }
-        } catch (error) {
-          // amadeus 不可用：保持关闭状态
-        }
-      }
-      sync()
-      // 防护：timer 服务缺失时绝不抛错/挂起（fallback 为单次同步）
-      if (typeof ctx.interval !== 'function') return
-      return ctx.interval(sync, 2000)
-    })
-
-    // ---- 「未读消息」条带（仅 amadeus 菜单启动后显示）----
+    // ---- 「未读消息」条带（插件启用即生效）----
     const RecallDock = (props) => {
-      const [on, setOn] = React.useState(getActive())
-      React.useEffect(() => subscribeStore(() => setOn(getActive())), [])
-      if (!on) return null
-
       const queue = (props.session && props.session.queue) || []
       const steering = queue.filter((row) => row.placement === 'steering')
       const [busy, setBusy] = React.useState(null)
