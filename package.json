@@ -15,7 +15,6 @@
     "README.md",
     "LICENSE"
   ],
-  "private": true,
   "license": "MIT",
   "keywords": [
     "deepseek-harness",
