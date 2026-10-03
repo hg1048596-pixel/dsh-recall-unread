@@ -14,7 +14,7 @@
 ## ✨ 功能特性
 
 - **启用即生效**：在插件市场（dsh-market）或插件管理页启用本插件后，「未读消息」条带立即生效；停用即整体不加载。不依赖任何启动器菜单。
-- **未读消息条带**：在输入框上方（`conversation.input.dock` 插槽）列出所有已发送但模型尚未读取的插话消息（`placement: 'steering'`）。
+- **未读消息条带**：在输入框上方（`conversation.input.dock` 插槽）列出所有已发送但模型尚未读取的插话消息（0.2.x 取 `inbox['next-step']` 的用户插话，0.1.x 取 `placement === 'steering'`）。
 - **单条撤回**：每条消息显示预览文本 + 「撤回」按钮，点击后消息从对话中移除，并提示“已撤回一条消息”。
 - **全部撤回**：存在多条未读消息时提供「全部撤回」一键操作。
 - **只读语义**：消息一旦被模型认领（开始读取）会自动离开条带，此时无法撤回——严格符合“仅未读取可撤回”。
@@ -22,7 +22,7 @@
 
 ## 🔍 工作原理
 
-DSH 中“已发送但未读取”的消息 = 仍停留在 Agent **inbox**（待处理队列）中的消息，即 `ConversationSnapshot.queue` 快照里的 pending 项。它有两种 placement：
+DSH 中“已发送但未读取”的消息 = 仍停留在 Agent **inbox**（待处理队列）中的消息：0.2.x 是 `inbox['next-turn']` / `inbox['next-step']` 里的 pending 项，0.1.x 是会话快照 `ConversationSnapshot.queue`。它有两种 placement：
 
 | placement | 含义 | 官方界面现状 |
 | --- | --- | --- |
@@ -41,8 +41,18 @@ Client  (撤回按钮)
 Host    harness.handle('recall')
    │  agents.get(sessionId).inbox.remove(itemId)
    ▼
-效果   消息从 inbox 移除 → session/queue 快照更新 → 气泡与条带同步消失
+效果   消息从 inbox 移除 → inbox 投影更新 → 气泡与条带同步消失
 ```
+
+### 🧩 运行时兼容（DSH 0.1.x / 0.2.x）
+
+| 运行时 | 「未读插话」数据源 | 撤回调用 |
+| --- | --- | --- |
+| **0.2.x**（含 desktop profile） | `useProjection('inbox')['next-step']` 中 `source.kind === 'user'` 的行 | `sessions.binding(sessionId).session.updateQueue(id, { kind: 'remove' })`（失败码带命名空间：`session/queue-item-not-found`） |
+| **0.1.x** | 会话快照 `session.queue` 中 `placement === 'steering'` 的行 | 同上（失败码 `queue-item-not-found`） |
+
+- 0.2.x 的 `SessionSnapshot` 已移除 `queue` 字段，本地回显改到 `pendingSubmissions`；插话被接纳后进入 `inbox['next-step']`，在模型下一步读取前仍可撤回。
+- 官方队列坞只覆盖 `next-turn`（排队消息，已有删除按钮），`next-step`（插话）这一格由本插件补齐。
 
 Host 端逻辑与官方 `session.updateQueue` 中 `kind: 'remove'` 的内部实现一致（`agent.inbox.remove`）。
 
@@ -181,6 +191,10 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File tools/recall-killswitch.ps1 -Actio
 
 ## 📦 版本历史
 
+- **v1.2.0**（2026-10）适配 DSH 0.2.x（含 desktop profile）：未读插话改从
+  `useProjection('inbox')['next-step']` 读取（`SessionSnapshot.queue` 已被官方移除），
+  保留 0.1.x 的 `session.queue` 回退；预览文本按官方队列坞口径从 content 块折叠；
+  失败码兼容 `session/queue-item-not-found`。
 - **v1.1.0**（2026-08）移除 Amadeus 启动器依赖：删除 🧩 菜单入口与客户端
   amadeus 轮询，改为启用即生效（插件市场/管理页的启用·停用开关控制加载）。
 - **v1.0.1**（2026-08）防锁死固化：bundle 彻底移除 `module`/`exports` 引用

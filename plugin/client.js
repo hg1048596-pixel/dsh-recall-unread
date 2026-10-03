@@ -2,30 +2,36 @@
  * dsh-recall-unread — Client half（静态 web profile 版，启用即生效）
  *
  * 通过 window.__ModuleLoader__ 注册到 DSH 网页运行时。
+ *
  * ⚠️ 修改警告：__ModuleLoader__.load 的 factory 只注入 require，不注入 module/exports！
  *    factory 的【返回值】就是模块导出（{ inject, apply }），
  *    任何地方都不要引用 module / exports / module.exports ——
  *    那会抛 ReferenceError: module is not defined，导致启动时
  *    "Failed to load plugins / failed to import loader entry (dsh-recall-unread)"。
- *    （官方包的 CJS 写法 `var module = { exports: {} }` 也只是声明局部变量，
- *     本插件直接用 return 返回导出，彻底绕开这个坑。）
- * - 插件启用后，「未读消息」条带（conversation.input.dock）直接生效——
- *   列出仍处于 pending（模型尚未读取）的插话消息（placement: 'steering'），
- *   每条提供「撤回」按钮，撤回调用官方会话 RPC
- *   sessions.binding(sessionId).session.updateQueue(itemId, { kind: 'remove' })。
- * - 启用/停用由插件市场（dsh-market）或插件管理页的开关控制：禁用 = 不加载。
- * - 不再依赖 Amadeus 启动器（无 amadeus 轮询、无启动器菜单条目）。
+ *
+ * 功能：在 conversation.input.dock 插槽注册「未读消息」条带，列出已发送但模型尚未读取的插话
+ * （steering）消息，每条提供「撤回」按钮；撤回调用官方会话 RPC
+ * sessions.binding(sessionId).session.updateQueue(itemId, { kind: 'remove' })。
+ *
+ * 数据源（同时兼容两代运行时）：
+ *   - DSH 0.2.x（含 desktop profile）：useProjection('inbox')['next-step'] 中 source.kind === 'user' 的行。
+ *     插话被接纳后进入 agent inbox 的 next-step，模型下一步读取前都可以撤回；官方队列条带只覆盖
+ *     next-turn，这一格由本插件补齐。
+ *   - DSH 0.1.x：回退到会话快照 session.queue 里 placement === 'steering' 的行。
+ *
+ * 启用/停用由插件市场（dsh-market）或插件管理页的开关控制：禁用 = 不加载。
  */
 window.__ModuleLoader__?.load({ id: 'dsh-recall-unread', factory: (require) => {
   const React = require('react')
-  // 声明必需的 UI 服务 + timer（条带状态提示自动清除用 ctx.timeout）。
+  // 必需的 UI 服务 + timer（状态提示自动清除用 ctx.timeout）。
   // ⚠️ 不要去掉 'timer'：Cordis 的 ctx 是 Proxy，访问未 inject 的服务属性会直接抛
   //    "cannot get property \"timer\" without inject"，导致 apply 阶段加载失败。
+  // 'sessions' 故意不放进 inject：0.1.x 的组合里没有这个客户端服务，放进去插件会永不激活；
+  // 改为点击「撤回」时用 ctx.get('sessions') 取一次。
   const inject = ['slots', 'timer']
 
   function apply(ctx) {
     const slots = ctx.get('slots')
-    const sessions = ctx.get('sessions')
     if (slots === undefined) return
 
     // 样式（静态插件可直接操作 DOM；卸载时随 ctx.effect 清理）
@@ -53,10 +59,34 @@ window.__ModuleLoader__?.load({ id: 'dsh-recall-unread', factory: (require) => {
       try { styleTag.remove() } catch (error) { /* ignore */ }
     })
 
+    // ---- 预览文本 ----
+    // 0.2.x 的 inbox 行只有 content 块（没有 preview 字段），这里按官方 QueueDock 的同一口径折叠成一行。
+    const PREVIEW_CHARS = 80
+    function previewOfContent(content) {
+      if (!Array.isArray(content)) return ''
+      const flat = content
+        .filter((block) => block && block.type !== 'image' && block.type !== 'file')
+        .map((block) => (block.type === 'text' ? block.text : '[' + String(block.type) + ']'))
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+      const chars = Array.from(flat)
+      return chars.length > PREVIEW_CHARS ? chars.slice(0, PREVIEW_CHARS).join('') + '…' : flat
+    }
+
     // ---- 「未读消息」条带（插件启用即生效）----
     const RecallDock = (props) => {
-      const queue = (props.session && props.session.queue) || []
-      const steering = queue.filter((row) => row.placement === 'steering')
+      // props.useProjection 只在 0.2.x 出现；对同一组件实例恒定，可安全按运行时分支调用。
+      const inbox = props.useProjection !== undefined ? props.useProjection('inbox') : undefined
+      let rows
+      if (inbox !== undefined && inbox !== null) {
+        const nextStep = Array.isArray(inbox['next-step']) ? inbox['next-step'] : []
+        rows = nextStep.filter((row) => row && row.source && row.source.kind === 'user')
+      } else {
+        const legacyQueue = (props.session && props.session.queue) || []
+        rows = legacyQueue.filter((row) => row.placement === 'steering')
+      }
+
       const [busy, setBusy] = React.useState(null)
       const [status, setStatus] = React.useState(null)
       const sessionId = props.sessionId
@@ -66,20 +96,29 @@ window.__ModuleLoader__?.load({ id: 'dsh-recall-unread', factory: (require) => {
         return ctx.timeout(() => setStatus(null), 2500)
       }, [status])
 
-      if (steering.length === 0 || sessionId === undefined || sessions === undefined) return null
+      if (rows.length === 0 || sessionId === undefined) return null
+
+      // 0.1.x 的 code 是 queue-item-not-found，0.2.x 带命名空间前缀
+      const alreadySending = (code) => code === 'queue-item-not-found' || code === 'session/queue-item-not-found' || code === 'session/steer-unavailable'
+
+      const recall = async (row) => {
+        const sessions = ctx.get('sessions')
+        if (sessions === undefined) throw new Error('sessions service unavailable')
+        const binding = sessions.binding(sessionId)
+        if (binding === undefined) throw new Error('session binding unavailable')
+        return binding.session.updateQueue(row.id, { kind: 'remove' })
+      }
 
       const doRecall = async (row) => {
         if (busy !== null) return
         setBusy(row.id)
         try {
-          const binding = sessions.binding(sessionId)
-          if (binding === undefined) throw new Error('session binding unavailable')
-          const result = await binding.session.updateQueue(row.id, { kind: 'remove' })
+          const result = await recall(row)
           if (result && result.ok === true) {
             setStatus({ kind: 'info', text: '已撤回一条消息' })
           } else {
             const code = result && result.error && result.error.code
-            setStatus({ kind: 'error', text: code === 'queue-item-not-found' ? '该消息已开始发送，无法撤回' : '撤回失败，请重试' })
+            setStatus({ kind: 'error', text: alreadySending(code) ? '该消息已开始发送，无法撤回' : '撤回失败，请重试' })
           }
         } catch (error) {
           setStatus({ kind: 'error', text: '撤回失败，请重试' })
@@ -93,10 +132,8 @@ window.__ModuleLoader__?.load({ id: 'dsh-recall-unread', factory: (require) => {
         if (busy !== null) return
         setBusy('__all__')
         try {
-          const binding = sessions.binding(sessionId)
-          if (binding === undefined) throw new Error('session binding unavailable')
-          for (const row of steering) {
-            const result = await binding.session.updateQueue(row.id, { kind: 'remove' })
+          for (const row of rows) {
+            const result = await recall(row)
             if (!(result && result.ok === true)) throw new Error('recall rejected')
           }
           setStatus({ kind: 'info', text: '已撤回全部未读消息' })
@@ -112,9 +149,9 @@ window.__ModuleLoader__?.load({ id: 'dsh-recall-unread', factory: (require) => {
         React.createElement('div', { className: 'recall-panel' },
           React.createElement('div', { className: 'recall-head' },
             React.createElement('b', null, '未读消息'),
-            React.createElement('span', null, steering.length + ' 条已发送文字，模型尚未读取'),
+            React.createElement('span', null, rows.length + ' 条已发送插话，模型尚未读取'),
             React.createElement('span', { className: 'recall-spacer' }),
-            steering.length > 1 ? React.createElement('button', {
+            rows.length > 1 ? React.createElement('button', {
               type: 'button',
               className: 'recall-btn recall-btn-ghost',
               disabled: busy !== null,
@@ -125,8 +162,9 @@ window.__ModuleLoader__?.load({ id: 'dsh-recall-unread', factory: (require) => {
             className: status.kind === 'error' ? 'recall-status recall-status-error' : 'recall-status'
           }, status.text) : null,
           React.createElement('ul', { className: 'recall-list' },
-            steering.map((row) => React.createElement('li', { key: row.id, className: 'recall-row' },
-              React.createElement('span', { className: 'recall-preview', title: row.preview }, row.preview),
+            rows.map((row) => React.createElement('li', { key: row.id, className: 'recall-row' },
+              React.createElement('span', { className: 'recall-preview', title: row.preview !== undefined ? row.preview : previewOfContent(row.content) },
+                row.preview !== undefined ? row.preview : previewOfContent(row.content)),
               React.createElement('button', {
                 type: 'button',
                 className: 'recall-btn',

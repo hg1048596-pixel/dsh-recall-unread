@@ -4,9 +4,14 @@
  * 用法：在 DeepSeek Harness 的 Cordis 插件开发流程中（cordis_define），
  * 把本文件内容整体作为 code.client 传入。该函数体返回一个 Cordis Plugin。
  *
- * 职责：在 conversation.input.dock 插槽注册一条「未读消息」条带，
- * 列出所有仍处于 pending（模型尚未读取）的插话消息（placement: 'steering'），
- * 每条提供「撤回」按钮；撤回通过包内私有 RPC host.call('recall', …) 交给 Host 处理。
+ * 职责：在 conversation.input.dock 插槽注册一条「未读消息」条带，列出所有仍处于
+ * pending（模型尚未读取）的插话消息，每条提供「撤回」按钮；撤回通过包内私有 RPC
+ * host.call('recall', …) 交给 Host 处理。
+ *
+ * 数据源（兼容两代运行时）：
+ *   - DSH 0.2.x：useProjection('inbox')['next-step'] 中 source.kind === 'user' 的行
+ *     （SessionSnapshot.queue 已被官方移除）。
+ *   - DSH 0.1.x：会话快照 session.queue 中 placement === 'steering' 的行。
  */
 return {
   inject: ['timer'],
@@ -31,9 +36,31 @@ return {
       .recall-btn-ghost{background:transparent;color:var(--dsw-alias-label-secondary)}
     `)
 
+    // ---- 预览文本（0.2.x 的 inbox 行只有 content 块，没有 preview 字段）----
+    const PREVIEW_CHARS = 80
+    function previewOfContent(content) {
+      if (!Array.isArray(content)) return ''
+      const flat = content
+        .filter((block) => block && block.type !== 'image' && block.type !== 'file')
+        .map((block) => (block.type === 'text' ? block.text : '[' + String(block.type) + ']'))
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+      const chars = Array.from(flat)
+      return chars.length > PREVIEW_CHARS ? chars.slice(0, PREVIEW_CHARS).join('') + '…' : flat
+    }
+
     const RecallDock = (props) => {
-      const queue = (props.session && props.session.queue) || []
-      const steering = queue.filter((row) => row.placement === 'steering')
+      // 0.2.x：inbox 投影里 next-step 的用户插话；0.1.x：session.queue 里 placement === 'steering' 的行
+      const inbox = props.useProjection !== undefined ? props.useProjection('inbox') : undefined
+      let steering
+      if (inbox !== undefined && inbox !== null) {
+        const nextStep = Array.isArray(inbox['next-step']) ? inbox['next-step'] : []
+        steering = nextStep.filter((row) => row && row.source && row.source.kind === 'user')
+      } else {
+        const queue = (props.session && props.session.queue) || []
+        steering = queue.filter((row) => row.placement === 'steering')
+      }
       const [busy, setBusy] = React.useState(null)
       const [status, setStatus] = React.useState(null)
       const sessionId = props.sessionId
@@ -54,7 +81,8 @@ return {
             setStatus({ kind: 'info', text: '已撤回一条消息' })
           } else {
             const code = result && result.code
-            setStatus({ kind: 'error', text: code === 'already-claimed' ? '该消息已开始发送，无法撤回' : '撤回失败，请重试' })
+            const alreadySending = code === 'already-claimed' || code === 'queue-item-not-found' || code === 'session/queue-item-not-found' || code === 'session/steer-unavailable'
+            setStatus({ kind: 'error', text: alreadySending ? '该消息已开始发送，无法撤回' : '撤回失败，请重试' })
           }
         } catch (error) {
           setStatus({ kind: 'error', text: '撤回失败，请重试' })
@@ -99,7 +127,8 @@ return {
           }, status.text) : null,
           React.createElement('ul', { className: 'recall-list' },
             steering.map((row) => React.createElement('li', { key: row.id, className: 'recall-row' },
-              React.createElement('span', { className: 'recall-preview', title: row.preview }, row.preview),
+              React.createElement('span', { className: 'recall-preview', title: row.preview !== undefined ? row.preview : previewOfContent(row.content) },
+                row.preview !== undefined ? row.preview : previewOfContent(row.content)),
               React.createElement('button', {
                 type: 'button',
                 className: 'recall-btn',

@@ -2,7 +2,7 @@
   "name": "dsh-recall-unread",
   "displayName": "撤回已发送未读取的消息",
   "description": "DeepSeek Harness 插件：撤回已发送但尚未被模型读取的文字消息（pending steering 消息）。",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "idPrefix": "recall",
   "pluginId": "recall-3",
   "currentPackageId": "pkg-10",
