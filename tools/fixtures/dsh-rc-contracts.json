@@ -1,0 +1,258 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/deepseek-ai/deepseek-harness",
+  "checkedOn": "2026-11-03",
+  "method": "Official GitHub tag refs and UTF-8 file contents, checked independently for all five release candidates. Git blob SHA-1s identify exact upstream file bytes. This is source compatibility evidence, not five GUI test runs.",
+  "contracts": [
+    {
+      "id": "projection-reader",
+      "path": "packages/api/session-controller/src/client/sessions/projection-store.ts",
+      "needles": [
+        "export type UseProjection = {",
+        "  <K extends Extract<keyof SessionProjectionMap, string>>(key: K): SessionProjectionMap[K] | undefined"
+      ]
+    },
+    {
+      "id": "inbox-projection",
+      "path": "packages/core/agent/src/types.ts",
+      "needles": [
+        "export type InboxTarget = 'next-turn' | 'next-step'",
+        "  readonly 'next-step': readonly UserMessage[]"
+      ]
+    },
+    {
+      "id": "inbox-remove",
+      "path": "packages/core/agent-loop/src/inbox.ts",
+      "needles": [
+        "  remove(messageId: MessageId): boolean {"
+      ]
+    },
+    {
+      "id": "rpc-client",
+      "path": "packages/api/session-controller/src/client/sessions/session.ts",
+      "needles": [
+        "  async updateQueue(itemId: MessageId, action: QueueAction): Promise<RemoteResult<{ accepted: true }>> {",
+        "    return this.remote.session.updateQueue({ sessionId: this.sessionId, itemId, action })"
+      ]
+    },
+    {
+      "id": "session-binding",
+      "path": "packages/api/session-controller/src/client/sessions/service.ts",
+      "needles": [
+        "  binding(id: SessionId): SessionBinding | undefined {",
+        "    return this.scopes.get(id)?.binding"
+      ]
+    },
+    {
+      "id": "rpc-remove",
+      "path": "packages/api/session-controller/src/commands.ts",
+      "needles": [
+        "      case 'remove': {",
+        "        agent.inbox.remove(request.itemId)",
+        "    return { accepted: true }"
+      ]
+    },
+    {
+      "id": "subagent-mutability",
+      "path": "packages/client/ui-conversation/src/client/queue/QueueDock.tsx",
+      "needles": [
+        "  const inbox = useProjection('inbox') as unknown as InboxState | undefined",
+        "  const queueMutable = useSession(s => s.subagent === null || s.subagent.address.mode === 'continuable')"
+      ]
+    },
+    {
+      "id": "bundle-factory",
+      "path": "packages/client/modules/src/client/system.ts",
+      "needles": [
+        "      const exports = registered.factory(this.makeRequire(ownerId, edges))"
+      ]
+    },
+    {
+      "id": "input-dock-declaration",
+      "path": "packages/client/ui-conversation/src/client/contract/slots.ts",
+      "needles": [
+        "    'conversation.input.dock': { kind: 'list'; scope: 'session'; owner: InputZone }"
+      ]
+    },
+    {
+      "id": "input-dock-props",
+      "path": "packages/extensions/cordis-client-runner/src/client/slot-catalog.ts",
+      "section": {
+        "start": "    key: 'conversation.input.dock',",
+        "end": "    key: 'conversation.input.left',"
+      },
+      "needles": [
+        "      'useSession: SessionSnapshotSelector',",
+        "      'sessionId: SessionId',",
+        "      'useProjection: UseProjection',",
+        "      'useAccess: (action: RemoteEndpoint) => boolean',"
+      ]
+    },
+    {
+      "id": "access-endpoint-syntax",
+      "path": "packages/api/remote-access/src/types.ts",
+      "needles": [
+        "/** Canonical `<namespace>/<method>` Remote endpoint; its segments never contain `:`. */",
+        "export type RemoteAccessEndpoint = `${string}/${string}`"
+      ]
+    },
+    {
+      "id": "dynamic-service-lookup",
+      "path": "packages/extensions/cordis-client-runner/src/client/guard.ts",
+      "needles": [
+        "      if (prop === 'get') return (name: string): unknown => readService(name, false)"
+      ]
+    },
+    {
+      "id": "timer-provider",
+      "path": "packages/extensions/cordis-client-runner/src/client/index.ts",
+      "needles": [
+        "  provideClientTimer(ctx)"
+      ]
+    },
+    {
+      "id": "timer-service",
+      "path": "packages/extensions/cordis-client-runner/src/client/timer.ts",
+      "needles": [
+        "    super(ctx, 'timer')",
+        "    ctx.mixin('timer', ['timeout', 'interval', 'throttle', 'debounce', 'setTimeout', 'setInterval'])"
+      ]
+    },
+    {
+      "id": "client-dependency-diagnostics",
+      "path": "packages/client/web/src/boot-client.ts",
+      "needles": [
+        "      const missing = Object.keys(entry.fiber.inject).filter(service => ctx.get(service) === undefined)"
+      ]
+    },
+    {
+      "id": "standard-props-delivery",
+      "path": "packages/client/ui-renderer/src/client/scoped-slots.tsx",
+      "needles": [
+        "  return <Comp {...kit} {...injected} {...slotInjected.props} {...contextual} {...ownerProps} />"
+      ]
+    }
+  ],
+  "releases": [
+    {
+      "version": "0.2.1-rc.1",
+      "tag": "dsh-v0.2.1-rc.1",
+      "commit": "1600d8a1e140dcde43a1a0941940a0480712c011",
+      "releaseUrl": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.1",
+      "files": {
+        "packages/api/session-controller/src/commands.ts": "8dd38573c8bb79dfed0e675f95e0848da9bb1381",
+        "packages/api/session-controller/src/client/sessions/service.ts": "b992a34920d863c81e8dd06bdb240ee4ef44a4c6",
+        "packages/api/session-controller/src/client/sessions/session.ts": "09494e01abe7e1663e17770324b469ef2c0210c6",
+        "packages/api/session-controller/src/client/sessions/projection-store.ts": "c10c81c4751d98dd592453aea18bc3a6a270e208",
+        "packages/core/agent-loop/src/inbox.ts": "ef00887a544c2dededb484ff7b9ce0efe83dea21",
+        "packages/core/agent/src/types.ts": "5cbc81df38c81be4f5c4d85e6a2c8acd5108ed95",
+        "packages/client/modules/src/client/system.ts": "6597f54afca908f34bf93a8140c2ce628ed2945f",
+        "packages/client/ui-conversation/src/client/queue/QueueDock.tsx": "2ce7a20eef7f5f6a2f951a073156c1ea40c5b343",
+        "packages/client/ui-conversation/src/client/contract/slots.ts": "a02f5aa662e47b9de87f424cc6bf54c41502c7c3",
+        "packages/extensions/cordis-client-runner/src/client/slot-catalog.ts": "de1387b27a791e35fd16d3279e7a079d7e4890a9",
+        "packages/extensions/cordis-client-runner/src/client/index.ts": "25fb48fe3d5e7f6149203ee4dc0f88506ff7505c",
+        "packages/extensions/cordis-client-runner/src/client/timer.ts": "e2b07c847250fcb57466045b18d25fe4c952987f",
+        "packages/client/web/src/boot-client.ts": "bbc8e215e2f9dc36bf198f999f43595fdaa2cc2d",
+        "packages/client/ui-renderer/src/client/scoped-slots.tsx": "89ab67fb19c43579a28ac80555fa313fbc04615d",
+        "packages/api/remote-access/src/types.ts": "c598ee60a291643293038fe845f130c6c698c02d",
+        "packages/extensions/cordis-client-runner/src/client/guard.ts": "00788784e5ae30ed09285c32c35cc4f2e5362011"
+      }
+    },
+    {
+      "version": "0.2.1-rc.2",
+      "tag": "dsh-v0.2.1-rc.2",
+      "commit": "687f282e8625c6b8d11ff58211a90524be2e4317",
+      "releaseUrl": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.2",
+      "files": {
+        "packages/api/session-controller/src/commands.ts": "8dd38573c8bb79dfed0e675f95e0848da9bb1381",
+        "packages/api/session-controller/src/client/sessions/service.ts": "b992a34920d863c81e8dd06bdb240ee4ef44a4c6",
+        "packages/api/session-controller/src/client/sessions/session.ts": "09494e01abe7e1663e17770324b469ef2c0210c6",
+        "packages/api/session-controller/src/client/sessions/projection-store.ts": "c10c81c4751d98dd592453aea18bc3a6a270e208",
+        "packages/core/agent-loop/src/inbox.ts": "ef00887a544c2dededb484ff7b9ce0efe83dea21",
+        "packages/core/agent/src/types.ts": "5cbc81df38c81be4f5c4d85e6a2c8acd5108ed95",
+        "packages/client/modules/src/client/system.ts": "6597f54afca908f34bf93a8140c2ce628ed2945f",
+        "packages/client/ui-conversation/src/client/queue/QueueDock.tsx": "2ce7a20eef7f5f6a2f951a073156c1ea40c5b343",
+        "packages/client/ui-conversation/src/client/contract/slots.ts": "a02f5aa662e47b9de87f424cc6bf54c41502c7c3",
+        "packages/extensions/cordis-client-runner/src/client/slot-catalog.ts": "50bcbe529a7fd300d65688e8854e5da93d8250d4",
+        "packages/extensions/cordis-client-runner/src/client/index.ts": "25fb48fe3d5e7f6149203ee4dc0f88506ff7505c",
+        "packages/extensions/cordis-client-runner/src/client/timer.ts": "e2b07c847250fcb57466045b18d25fe4c952987f",
+        "packages/client/web/src/boot-client.ts": "bbc8e215e2f9dc36bf198f999f43595fdaa2cc2d",
+        "packages/client/ui-renderer/src/client/scoped-slots.tsx": "89ab67fb19c43579a28ac80555fa313fbc04615d",
+        "packages/api/remote-access/src/types.ts": "c598ee60a291643293038fe845f130c6c698c02d",
+        "packages/extensions/cordis-client-runner/src/client/guard.ts": "00788784e5ae30ed09285c32c35cc4f2e5362011"
+      }
+    },
+    {
+      "version": "0.2.1-rc.3",
+      "tag": "dsh-v0.2.1-rc.3",
+      "commit": "1f81c047fc48fa190a683e469daa699857e9afe8",
+      "releaseUrl": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.3",
+      "files": {
+        "packages/api/session-controller/src/commands.ts": "8dd38573c8bb79dfed0e675f95e0848da9bb1381",
+        "packages/api/session-controller/src/client/sessions/service.ts": "8511b882e28499457f85f4def31243eca4057ee0",
+        "packages/api/session-controller/src/client/sessions/session.ts": "09494e01abe7e1663e17770324b469ef2c0210c6",
+        "packages/api/session-controller/src/client/sessions/projection-store.ts": "c10c81c4751d98dd592453aea18bc3a6a270e208",
+        "packages/core/agent-loop/src/inbox.ts": "ef00887a544c2dededb484ff7b9ce0efe83dea21",
+        "packages/core/agent/src/types.ts": "5cbc81df38c81be4f5c4d85e6a2c8acd5108ed95",
+        "packages/client/modules/src/client/system.ts": "6597f54afca908f34bf93a8140c2ce628ed2945f",
+        "packages/client/ui-conversation/src/client/queue/QueueDock.tsx": "2ce7a20eef7f5f6a2f951a073156c1ea40c5b343",
+        "packages/client/ui-conversation/src/client/contract/slots.ts": "4a0bd3a7391aa72cf215c25cf80ffcb16b434103",
+        "packages/extensions/cordis-client-runner/src/client/slot-catalog.ts": "33794f1a7168d48bc364e38fe1d55005635fde1c",
+        "packages/extensions/cordis-client-runner/src/client/index.ts": "25fb48fe3d5e7f6149203ee4dc0f88506ff7505c",
+        "packages/extensions/cordis-client-runner/src/client/timer.ts": "e2b07c847250fcb57466045b18d25fe4c952987f",
+        "packages/client/web/src/boot-client.ts": "bbc8e215e2f9dc36bf198f999f43595fdaa2cc2d",
+        "packages/client/ui-renderer/src/client/scoped-slots.tsx": "89ab67fb19c43579a28ac80555fa313fbc04615d",
+        "packages/api/remote-access/src/types.ts": "c598ee60a291643293038fe845f130c6c698c02d",
+        "packages/extensions/cordis-client-runner/src/client/guard.ts": "00788784e5ae30ed09285c32c35cc4f2e5362011"
+      }
+    },
+    {
+      "version": "0.2.1-rc.4",
+      "tag": "dsh-v0.2.1-rc.4",
+      "commit": "504a01a9578abc2c6f1fb896b1dc322c9fe24f66",
+      "releaseUrl": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.4",
+      "files": {
+        "packages/api/session-controller/src/commands.ts": "8dd38573c8bb79dfed0e675f95e0848da9bb1381",
+        "packages/api/session-controller/src/client/sessions/service.ts": "8511b882e28499457f85f4def31243eca4057ee0",
+        "packages/api/session-controller/src/client/sessions/session.ts": "09494e01abe7e1663e17770324b469ef2c0210c6",
+        "packages/api/session-controller/src/client/sessions/projection-store.ts": "c10c81c4751d98dd592453aea18bc3a6a270e208",
+        "packages/core/agent-loop/src/inbox.ts": "ef00887a544c2dededb484ff7b9ce0efe83dea21",
+        "packages/core/agent/src/types.ts": "5cbc81df38c81be4f5c4d85e6a2c8acd5108ed95",
+        "packages/client/modules/src/client/system.ts": "6597f54afca908f34bf93a8140c2ce628ed2945f",
+        "packages/client/ui-conversation/src/client/queue/QueueDock.tsx": "2ce7a20eef7f5f6a2f951a073156c1ea40c5b343",
+        "packages/client/ui-conversation/src/client/contract/slots.ts": "4a0bd3a7391aa72cf215c25cf80ffcb16b434103",
+        "packages/extensions/cordis-client-runner/src/client/slot-catalog.ts": "33794f1a7168d48bc364e38fe1d55005635fde1c",
+        "packages/extensions/cordis-client-runner/src/client/index.ts": "25fb48fe3d5e7f6149203ee4dc0f88506ff7505c",
+        "packages/extensions/cordis-client-runner/src/client/timer.ts": "e2b07c847250fcb57466045b18d25fe4c952987f",
+        "packages/client/web/src/boot-client.ts": "bbc8e215e2f9dc36bf198f999f43595fdaa2cc2d",
+        "packages/client/ui-renderer/src/client/scoped-slots.tsx": "89ab67fb19c43579a28ac80555fa313fbc04615d",
+        "packages/api/remote-access/src/types.ts": "c598ee60a291643293038fe845f130c6c698c02d",
+        "packages/extensions/cordis-client-runner/src/client/guard.ts": "00788784e5ae30ed09285c32c35cc4f2e5362011"
+      }
+    },
+    {
+      "version": "0.2.1-rc.5",
+      "tag": "dsh-v0.2.1-rc.5",
+      "commit": "b830ec950faba0a46dda564be3e2d854afed94f1",
+      "releaseUrl": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.5",
+      "files": {
+        "packages/api/session-controller/src/commands.ts": "8dd38573c8bb79dfed0e675f95e0848da9bb1381",
+        "packages/api/session-controller/src/client/sessions/service.ts": "8511b882e28499457f85f4def31243eca4057ee0",
+        "packages/api/session-controller/src/client/sessions/session.ts": "09494e01abe7e1663e17770324b469ef2c0210c6",
+        "packages/api/session-controller/src/client/sessions/projection-store.ts": "c10c81c4751d98dd592453aea18bc3a6a270e208",
+        "packages/core/agent-loop/src/inbox.ts": "ef00887a544c2dededb484ff7b9ce0efe83dea21",
+        "packages/core/agent/src/types.ts": "5cbc81df38c81be4f5c4d85e6a2c8acd5108ed95",
+        "packages/client/modules/src/client/system.ts": "6597f54afca908f34bf93a8140c2ce628ed2945f",
+        "packages/client/ui-conversation/src/client/queue/QueueDock.tsx": "2ce7a20eef7f5f6a2f951a073156c1ea40c5b343",
+        "packages/client/ui-conversation/src/client/contract/slots.ts": "4a0bd3a7391aa72cf215c25cf80ffcb16b434103",
+        "packages/extensions/cordis-client-runner/src/client/slot-catalog.ts": "1847635f0a4727d6e358860adcf5b088e4cd897b",
+        "packages/extensions/cordis-client-runner/src/client/index.ts": "25fb48fe3d5e7f6149203ee4dc0f88506ff7505c",
+        "packages/extensions/cordis-client-runner/src/client/timer.ts": "e2b07c847250fcb57466045b18d25fe4c952987f",
+        "packages/client/web/src/boot-client.ts": "bbc8e215e2f9dc36bf198f999f43595fdaa2cc2d",
+        "packages/client/ui-renderer/src/client/scoped-slots.tsx": "89ab67fb19c43579a28ac80555fa313fbc04615d",
+        "packages/api/remote-access/src/types.ts": "c598ee60a291643293038fe845f130c6c698c02d",
+        "packages/extensions/cordis-client-runner/src/client/guard.ts": "00788784e5ae30ed09285c32c35cc4f2e5362011"
+      }
+    }
+  ]
+}

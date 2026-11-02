@@ -77,29 +77,38 @@ window.__ModuleLoader__?.load({ id: 'dsh-recall-unread', factory: (require) => {
     // ---- 「未读消息」条带（插件启用即生效）----
     const RecallDock = (props) => {
       // props.useProjection 只在 0.2.x 出现；对同一组件实例恒定，可安全按运行时分支调用。
-      const inbox = props.useProjection !== undefined ? props.useProjection('inbox') : undefined
+      const hasProjection = typeof props.useProjection === 'function'
+      const inbox = hasProjection ? props.useProjection('inbox') : undefined
+      const session = typeof props.useSession === 'function' ? props.useSession((value) => value) : props.session
+      const canUpdate = typeof props.useAccess === 'function' ? props.useAccess('session/updateQueue') : true
       let rows
-      if (inbox !== undefined && inbox !== null) {
-        const nextStep = Array.isArray(inbox['next-step']) ? inbox['next-step'] : []
-        rows = nextStep.filter((row) => row && row.source && row.source.kind === 'user')
+      if (hasProjection) {
+        // 投影未就绪时也不能回退到旧快照，否则会显示已被读取的陈旧消息。
+        const nextStep = inbox && Array.isArray(inbox['next-step']) ? inbox['next-step'] : []
+        rows = nextStep.filter((row) => row && typeof row.id === 'string' && row.source && row.source.kind === 'user')
       } else {
-        const legacyQueue = (props.session && props.session.queue) || []
-        rows = legacyQueue.filter((row) => row.placement === 'steering')
+        const legacyQueue = session && Array.isArray(session.queue) ? session.queue : []
+        rows = legacyQueue.filter((row) => row && typeof row.id === 'string' && row.placement === 'steering')
       }
 
       const [busy, setBusy] = React.useState(null)
+      const busyRef = React.useRef(false)
       const [status, setStatus] = React.useState(null)
       const sessionId = props.sessionId
+      // RC 系列的只读 subagent 会话与官方 QueueDock 一样不提供修改操作。
+      const subagent = session && session.subagent
+      const queueMutable = canUpdate && (!subagent || (subagent.address && subagent.address.mode === 'continuable'))
 
       React.useEffect(() => {
         if (status === null) return
         return ctx.timeout(() => setStatus(null), 2500)
       }, [status])
 
-      if (rows.length === 0 || sessionId === undefined) return null
+      if ((rows.length === 0 && status === null) || sessionId === undefined) return null
 
       // 0.1.x 的 code 是 queue-item-not-found，0.2.x 带命名空间前缀
       const alreadySending = (code) => code === 'queue-item-not-found' || code === 'session/queue-item-not-found' || code === 'session/steer-unavailable'
+      const accepted = (result) => result && result.ok === true && (!result.value || result.value.accepted !== false)
 
       const recall = async (row) => {
         const sessions = ctx.get('sessions')
@@ -110,11 +119,12 @@ window.__ModuleLoader__?.load({ id: 'dsh-recall-unread', factory: (require) => {
       }
 
       const doRecall = async (row) => {
-        if (busy !== null) return
+        if (busyRef.current || !queueMutable) return
+        busyRef.current = true
         setBusy(row.id)
         try {
           const result = await recall(row)
-          if (result && result.ok === true) {
+          if (accepted(result)) {
             setStatus({ kind: 'info', text: '已撤回一条消息' })
           } else {
             const code = result && result.error && result.error.code
@@ -124,23 +134,34 @@ window.__ModuleLoader__?.load({ id: 'dsh-recall-unread', factory: (require) => {
           setStatus({ kind: 'error', text: '撤回失败，请重试' })
           console.error('[dsh-recall-unread] recall failed', error)
         } finally {
+          busyRef.current = false
           setBusy((current) => (current === row.id ? null : current))
         }
       }
 
       const doRecallAll = async () => {
-        if (busy !== null) return
+        if (busyRef.current || !queueMutable) return
+        busyRef.current = true
         setBusy('__all__')
+        let failed = 0
+        let succeeded = 0
         try {
           for (const row of rows) {
-            const result = await recall(row)
-            if (!(result && result.ok === true)) throw new Error('recall rejected')
+            // 某条被模型抢先读取，不影响继续撤回其余仍未读的消息。
+            try {
+              const result = await recall(row)
+              if (accepted(result)) succeeded += 1
+              else failed += 1
+            } catch (error) {
+              failed += 1
+              console.error('[dsh-recall-unread] recall-all failed', error)
+            }
           }
-          setStatus({ kind: 'info', text: '已撤回全部未读消息' })
-        } catch (error) {
-          setStatus({ kind: 'error', text: '部分消息撤回失败，可能已开始发送' })
-          console.error('[dsh-recall-unread] recall-all failed', error)
+          setStatus(failed === 0
+            ? { kind: 'info', text: '已撤回全部未读消息' }
+            : { kind: 'error', text: '已撤回 ' + succeeded + ' 条，另有 ' + failed + ' 条撤回失败，可能已开始发送' })
         } finally {
+          busyRef.current = false
           setBusy(null)
         }
       }
@@ -149,9 +170,9 @@ window.__ModuleLoader__?.load({ id: 'dsh-recall-unread', factory: (require) => {
         React.createElement('div', { className: 'recall-panel' },
           React.createElement('div', { className: 'recall-head' },
             React.createElement('b', null, '未读消息'),
-            React.createElement('span', null, rows.length + ' 条已发送插话，模型尚未读取'),
+            rows.length > 0 ? React.createElement('span', null, rows.length + ' 条已发送插话，模型尚未读取') : null,
             React.createElement('span', { className: 'recall-spacer' }),
-            rows.length > 1 ? React.createElement('button', {
+            rows.length > 1 && queueMutable ? React.createElement('button', {
               type: 'button',
               className: 'recall-btn recall-btn-ghost',
               disabled: busy !== null,
@@ -159,18 +180,19 @@ window.__ModuleLoader__?.load({ id: 'dsh-recall-unread', factory: (require) => {
             }, '全部撤回') : null
           ),
           status !== null ? React.createElement('div', {
+            role: status.kind === 'error' ? 'alert' : 'status',
             className: status.kind === 'error' ? 'recall-status recall-status-error' : 'recall-status'
           }, status.text) : null,
           React.createElement('ul', { className: 'recall-list' },
             rows.map((row) => React.createElement('li', { key: row.id, className: 'recall-row' },
               React.createElement('span', { className: 'recall-preview', title: row.preview !== undefined ? row.preview : previewOfContent(row.content) },
                 row.preview !== undefined ? row.preview : previewOfContent(row.content)),
-              React.createElement('button', {
+              queueMutable ? React.createElement('button', {
                 type: 'button',
                 className: 'recall-btn',
                 disabled: busy !== null,
                 onClick: () => doRecall(row)
-              }, busy === row.id ? '撤回中…' : '撤回')
+              }, busy === row.id ? '撤回中…' : '撤回') : null
             ))
           )
         )
