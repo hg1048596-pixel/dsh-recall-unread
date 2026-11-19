@@ -47,6 +47,7 @@ function createHooks() {
   }
   return {
     React,
+    get dirty() { return dirty },
     render(component, props) {
       let tree
       let attempts = 0
@@ -68,6 +69,39 @@ function createHooks() {
   }
 }
 
+// Public locale service fixture: dictionaries and subscriptions have explicit owners.
+export function createLocale(active = 'en') {
+  let snapshot = { active, revision: 0 }
+  const dictionaries = new Map()
+  const listeners = new Set()
+  const publish = () => {
+    snapshot = { ...snapshot, revision: snapshot.revision + 1 }
+    for (const listener of [...listeners]) listener()
+  }
+  return {
+    dictionaries, listeners,
+    getSnapshot() { return snapshot },
+    subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener) },
+    register(namespace, dicts) {
+      assert.equal(dictionaries.has(namespace), false, 'duplicate dictionary owner')
+      dictionaries.set(namespace, dicts)
+      publish()
+      return () => { dictionaries.delete(namespace); publish() }
+    },
+    bind(namespace) {
+      return (key, params = {}) => {
+        const dicts = dictionaries.get(namespace)
+        // Baseline locales and French's declared English fallback; the host
+        // resolves browser regional tags before selecting these locale IDs.
+        const language = snapshot.active.toLowerCase()
+        const template = dicts?.[language]?.[key] ?? dicts?.en?.[key] ?? key
+        return template.replace(/\{(\w+)\}/g, (match, name) => name in params ? String(params[name]) : match)
+      }
+    },
+    setLocale(active) { snapshot = { ...snapshot, active }; publish() },
+  }
+}
+
 export function createClient(variant, options = {}) {
   const hooks = createHooks()
   const calls = []
@@ -76,6 +110,15 @@ export function createClient(variant, options = {}) {
   const timers = new Set()
   const disposers = []
   const styleTags = []
+  const services = { ...options.services }
+  const injections = new Set()
+  const browserListeners = new Set()
+  const navigator = options.navigator
+  const window = {
+    addEventListener(name, callback) { assert.equal(name, 'languagechange'); browserListeners.add(callback) },
+    removeEventListener(name, callback) { assert.equal(name, 'languagechange'); browserListeners.delete(callback) },
+  }
+  let disposed = false
   let registered
   let responder = async () => ({ ok: true, value: { accepted: true } })
   const invoke = async (sessionId, itemId, action, transport) => {
@@ -105,7 +148,22 @@ export function createClient(variant, options = {}) {
     get(name) {
       if (name === 'slots') return options.noSlots ? undefined : slots
       if (name === 'sessions') return options.noSessions ? undefined : sessions
-      return options.services?.[name]
+      return services[name]
+    },
+    inject(names, callback) {
+      assert.deepEqual(names, ['locale'])
+      const injection = { cleanups: [], start() {
+        if (!services.locale) return
+        const child = { get: ctx.get, effect(effect) {
+          const cleanup = effect()
+          if (typeof cleanup === 'function') injection.cleanups.push(cleanup)
+          return cleanup
+        } }
+        callback(child)
+      }, stop() { for (const cleanup of injection.cleanups.splice(0).reverse()) cleanup() } }
+      injections.add(injection)
+      injection.start()
+      disposers.push(() => { injection.stop(); injections.delete(injection) })
     },
     effect(callback) {
       const cleanup = callback()
@@ -130,8 +188,8 @@ export function createClient(variant, options = {}) {
   let plugin
   if (variant === 'static') {
     let definition
-    const window = { __ModuleLoader__: { load(value) { definition = value } } }
-    new Function('window', 'document', 'console', source)(window, document, consoleShim)
+    window.__ModuleLoader__ = { load(value) { definition = value } }
+    new Function('window', 'document', 'console', 'navigator', source)(window, document, consoleShim, navigator)
     assert.equal(definition?.id, 'dsh-recall-unread')
     plugin = definition.factory((id) => {
       assert.equal(id, 'react')
@@ -143,7 +201,7 @@ export function createClient(variant, options = {}) {
       return invoke(args.sessionId, args.itemId, { kind: 'remove' }, 'private-host')
     } }
     const styles = { insert(css) { styleTags.push({ textContent: css }) } }
-    plugin = new Function('React', 'host', 'styles', 'console', source)(hooks.React, host, styles, consoleShim)
+    plugin = new Function('React', 'host', 'styles', 'console', 'navigator', 'window', source)(hooks.React, host, styles, consoleShim, navigator, window)
   }
   plugin.apply(ctx)
   if (!options.noSlots) assert.ok(registered, 'RecallDock was not registered')
@@ -151,7 +209,14 @@ export function createClient(variant, options = {}) {
   let currentProps
   let tree
   return {
-    calls, transports, errors, timers, styleTags, plugin, React: hooks.React,
+    calls, transports, errors, timers, styleTags, plugin, browserListeners, React: hooks.React,
+    setLocaleService(service) {
+      if (disposed) return
+      for (const injection of injections) injection.stop()
+      services.locale = service
+      for (const injection of injections) injection.start()
+    },
+    languageChanged() { for (const listener of browserListeners) listener() },
     get registration() { return registered },
     get tree() { return tree },
     respond(callback) { responder = callback },
@@ -160,11 +225,17 @@ export function createClient(variant, options = {}) {
       tree = hooks.render(registered.component, props)
       return tree
     },
+    flush() { return hooks.dirty ? this.render() : tree },
     expireStatus() {
       for (const callback of [...timers]) { timers.delete(callback); callback() }
       return this.render()
     },
-    dispose() { hooks.unmount(); for (const dispose of disposers) dispose() },
+    dispose() {
+      if (disposed) return
+      disposed = true
+      hooks.unmount()
+      for (const dispose of disposers.reverse()) dispose()
+    },
   }
 }
 
