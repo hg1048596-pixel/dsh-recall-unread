@@ -7,7 +7,12 @@ import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { button, buttons, createClient, deferred, texts, walk } from './client-test-harness.mjs'
+import { button, buttons, createClient as createRawClient, createLocale, deferred, texts, walk } from './client-test-harness.mjs'
+
+// Preserve the original Chinese scenarios on a legacy host without locale.
+const createClient = (variant, options = {}) => createRawClient(variant, {
+  navigator: { languages: ['zh-CN'] }, ...options,
+})
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const userRow = (id, text = id) => ({ id, source: { kind: 'user' }, content: [{ type: 'text', text }] })
@@ -330,3 +335,127 @@ test('dynamic: missing binding never falls back around the official RPC', async 
   assert.deepEqual(client.transports, [])
   assert.match(texts(client.render()), /撤回失败/)
 })
+
+for (const variant of ['static', 'dynamic']) {
+  const setup = (t, options = {}) => {
+    const client = createRawClient(variant, options)
+    t.after(() => client.dispose())
+    return client
+  }
+  const props = () => projectionProps({ 'next-step': [userRow('s1', '原文 {count} <b>preview</b>'), userRow('s2')] })
+
+  for (const [active, label] of [['en', 'Unread messages'], ['zh', '未读消息'], ['fr', 'Unread messages']]) {
+    test(`${variant}: host ${active} takes precedence over browser language`, (t) => {
+      const locale = createLocale(active)
+      const client = setup(t, { services: { locale }, navigator: { languages: [active === 'zh' ? 'en-US' : 'zh-CN'] } })
+      assert.ok(texts(client.render(props())).includes(label))
+      assert.match(texts(client.tree), /原文 \{count\} <b>preview<\/b>/)
+      assert.equal(locale.dictionaries.size, 1)
+      assert.equal(locale.listeners.size, 1)
+      assert.equal(client.calls.length, 0)
+    })
+  }
+
+  for (const [navigator, label] of [
+    [undefined, 'Unread messages'], [{}, 'Unread messages'],
+    [{ languages: ['fr-FR', 'en-GB', 'zh-CN'] }, 'Unread messages'],
+    [{ languages: ['fr-FR', 'zh-Hant-TW', 'en'] }, '未读消息'],
+    [{ languages: ['EN-us', 'zh'] }, 'Unread messages'],
+    [{ languages: [], language: 'zh-CN' }, '未读消息'],
+    [{ languages: ['de-DE'] }, 'Unread messages'],
+  ]) {
+    test(`${variant}: browser fallback ${JSON.stringify(navigator)}`, (t) => {
+      const client = setup(t, { navigator })
+      assert.ok(texts(client.render(props())).includes(label))
+      assert.equal(client.calls.length, 0)
+    })
+  }
+
+  test(`${variant}: switches busy labels and completed status without resetting the timer`, async (t) => {
+    const locale = createLocale('en')
+    const client = setup(t, { services: { locale } })
+    const pending = deferred()
+    client.respond(() => pending.promise)
+    const click = button(client.render(props()), 'Recall').props.onClick
+    const task = click()
+    assert.ok(button(client.render(), 'Recalling…').props.disabled)
+    locale.setLocale('zh')
+    assert.ok(button(client.flush(), '撤回中…').props.disabled)
+    await click()
+    assert.equal(client.calls.length, 1)
+    pending.resolve({ ok: true, value: { accepted: true } })
+    await task
+    assert.match(texts(client.render()), /已撤回一条消息/)
+    const timer = [...client.timers][0]
+    locale.setLocale('en')
+    assert.match(texts(client.flush()), /Recalled one message/)
+    assert.equal([...client.timers][0], timer)
+    assert.deepEqual(client.calls, [{ sessionId: 'session-1', itemId: 's1', action: { kind: 'remove' } }])
+    assert.deepEqual(client.transports, ['official-rpc'])
+  })
+
+  for (const [result, english, chinese] of [
+    ['claimed', 'This message is already being sent and cannot be recalled.', '该消息已开始发送，无法撤回'],
+    ['rejected', 'Recall failed. Please try again.', '撤回失败，请重试'],
+    ['transport', 'Recall failed. Please try again.', '撤回失败，请重试'],
+    ['all', 'Recalled all unread messages.', '已撤回全部未读消息'],
+    ['partial', 'Recalled 1; failed to recall 1. They may already be sending.', '已撤回 1 条，另有 1 条撤回失败，可能已开始发送'],
+  ]) {
+    test(`${variant}: ${result} status retranslates live with counts intact`, async (t) => {
+      const locale = createLocale('en')
+      const client = setup(t, { services: { locale } })
+      client.respond(async ({ itemId }) => {
+        if (result === 'transport') throw new Error('offline transport failure')
+        if (result === 'claimed' || (result === 'partial' && itemId === 's2')) return failure(variant, 'session/queue-item-not-found')
+        return { ok: true, value: { accepted: result !== 'rejected' } }
+      })
+      await button(client.render(props()), ['all', 'partial'].includes(result) ? 'Recall all' : 'Recall').props.onClick()
+      assert.ok(texts(client.render()).includes(english))
+      const timer = [...client.timers][0]
+      locale.setLocale('zh')
+      assert.ok(texts(client.flush()).includes(chinese))
+      assert.equal([...client.timers][0], timer)
+      assert.deepEqual(client.calls.map(({ itemId }) => itemId), ['all', 'partial'].includes(result) ? ['s1', 's2'] : ['s1'])
+    })
+  }
+
+  test(`${variant}: late locale service adopts existing status and releases owned resources`, async (t) => {
+    const navigator = { languages: ['en-US'] }
+    const client = setup(t, { navigator })
+    await button(client.render(props()), 'Recall').props.onClick()
+    assert.match(texts(client.render()), /Recalled one message/)
+    const timer = [...client.timers][0]
+    const locale = createLocale('zh')
+    client.setLocaleService(locale)
+    assert.match(texts(client.flush()), /已撤回一条消息/)
+    assert.equal([...client.timers][0], timer)
+    assert.equal(locale.listeners.size, 1)
+    client.setLocaleService(undefined)
+    assert.match(texts(client.flush()), /Recalled one message/)
+    assert.equal(locale.listeners.size, 0)
+    assert.equal(locale.dictionaries.size, 0)
+    navigator.languages = ['zh-TW']
+    client.languageChanged()
+    assert.match(texts(client.flush()), /已撤回一条消息/)
+    client.setLocaleService(locale)
+    client.render()
+    client.dispose()
+    assert.equal(locale.listeners.size, 0)
+    assert.equal(locale.dictionaries.size, 0)
+    assert.equal(client.browserListeners.size, 0)
+    assert.equal(client.timers.size, 0)
+    client.setLocaleService(locale)
+    assert.equal(locale.listeners.size, 0)
+    assert.equal(client.calls.length, 1)
+  })
+
+  test(`${variant}: English locale leaves queue selection and permission checks unchanged`, (t) => {
+    const client = setup(t, { services: { locale: createLocale('en') } })
+    const inbox = { 'next-turn': [userRow('queued')], 'next-step': [userRow('human'), { ...userRow('tool'), source: { kind: 'tool' } }] }
+    const view = client.render(projectionProps(inbox, { useAccess(endpoint) { assert.equal(endpoint, 'session/updateQueue'); return false } }))
+    assert.match(texts(view), /human/)
+    assert.doesNotMatch(texts(view), /queued|tool/)
+    assert.equal(buttons(view).length, 0)
+    assert.equal(client.calls.length, 0)
+  })
+}
