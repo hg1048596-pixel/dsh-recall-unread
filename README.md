@@ -145,6 +145,12 @@ dsh plugin --profile web add /absolute/path/to/dsh-recall-unread
 
 本插件**零配置、开箱即用**，无需任何设置。静态安装修改 `plugin/client.js` 后重新部署并重启；动态版修改 `src/client.js` 后重新定义（`cordis_define`）。两处客户端逻辑应同步维护，常用可调项：
 
+### 界面语言 / UI language
+
+条带、按钮和结果提示跟随 DSH 当前语言，支持英文和中文，并实时响应语言切换；消息预览保持原文。旧版运行时没有 `locale` 服务时，按浏览器语言偏好顺序匹配 `en` / `zh`（含地区标签），无匹配则使用英文，无需额外配置。
+
+The dock follows DSH’s active language live, with English and Chinese copy. Without the locale service, it uses the first supported browser language (including regional tags), then English. Message previews are never translated. Switching languages does not restart the result notice’s 2.5-second timer.
+
 | 项 | 位置 | 说明 |
 | --- | --- | --- |
 | 条带排序 | `slots.register(…, order: 30)` | 数字越大越靠后，可调整与输入框的贴近程度 |
